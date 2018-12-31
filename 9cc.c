@@ -21,7 +21,7 @@ Token tokens[100];
 
 // divide string to tokens
 void tokenize(char *p) {
-    int pos = 0;
+    int i = 0;
     while (*p) {
 
         // skip whitespaces
@@ -32,19 +32,19 @@ void tokenize(char *p) {
 
         // addition or subtraction
         if (*p == '+' || *p == '-') {
-            tokens[pos].ty = *p;
-            tokens[pos].input = p;
-            pos++;
+            tokens[i].ty = *p;
+            tokens[i].input = p;
+            i++;
             p++;
             continue;
         }
 
         // integer number
         if (isdigit(*p)) {
-            tokens[pos].ty = TK_NUM;
-            tokens[pos].input = p;
-            tokens[pos].val = strtol(p, &p, 10);
-            pos++;
+            tokens[i].ty = TK_NUM;
+            tokens[i].input = p;
+            tokens[i].val = strtol(p, &p, 10);
+            i++;
             continue;
         }
 
@@ -54,13 +54,13 @@ void tokenize(char *p) {
     }
 
     // add terminate token
-    tokens[pos].ty = TK_EOF;
-    tokens[pos].input = p;
+    tokens[i].ty = TK_EOF;
+    tokens[i].input = p;
 }
 
 // report error
-void error(int pos) {
-    fprintf(stderr, "Unexpected token: %s\n", tokens[pos].input);
+void error(int i) {
+    fprintf(stderr, "Unexpected token: %s\n", tokens[i].input);
     exit(1);
 }
 
@@ -85,32 +85,32 @@ int main(int argc, char **argv) {
     printf("  mov rax, %d\n", tokens[0].val);
 
     // write assemblies from tokens like '+ <number>' or '- <number>'
-    int pos = 1;
-    while (tokens[pos].ty != TK_EOF) {
+    int i = 1;
+    while (tokens[i].ty != TK_EOF) {
         // addition
-        if (tokens[pos].ty == '+') {
-            pos++;
-            if (tokens[pos].ty != TK_NUM) {
-                error(pos);
+        if (tokens[i].ty == '+') {
+            i++;
+            if (tokens[i].ty != TK_NUM) {
+                error(i);
             }
-            printf("  add rax, %d\n", tokens[pos].val);
-            pos++;
+            printf("  add rax, %d\n", tokens[i].val);
+            i++;
             continue;
         }
 
         // subtraction
-        if (tokens[pos].ty == '-') {
-            pos++;
-            if (tokens[pos].ty != TK_NUM) {
-                error(pos);
+        if (tokens[i].ty == '-') {
+            i++;
+            if (tokens[i].ty != TK_NUM) {
+                error(i);
             }
-            printf("  sub rax, %d\n", tokens[pos].val);
-            pos++;
+            printf("  sub rax, %d\n", tokens[i].val);
+            i++;
             continue;
         }
 
         // show error if unexpected read
-        error(pos);
+        error(i);
     }
 
     printf("  ret\n");
