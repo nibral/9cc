@@ -1,5 +1,7 @@
+#include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,30 +129,155 @@ Node *expr() {
     return lhs;
 }
 
-// code generator
-char *regs[] = {"rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15", NULL};
-int cur;
+// type of IR
+enum {
+    IR_IMM,
+    IR_MOV,
+    IR_RETURN,
+    IR_KILL,
+    IR_NOP,
+};
 
-char *gen(Node *node) {
+// intermediate representation (IR)
+typedef struct {
+    int op;
+    int lhs;
+    int rhs;
+} IR;
+
+// create new IR
+IR *new_ir(int op, int lhs, int rhs) {
+    IR *ir = malloc(sizeof(IR));
+    ir->op = op;
+    ir->lhs = lhs;
+    ir->rhs = rhs;
+    return ir;
+}
+
+// IR instructions and position index
+IR *ins[1000];
+int inp;
+
+// number of register for next use
+int regno;
+
+// generate IR instructions
+int gen_ir_sub(Node *node) {
     if (node->ty == ND_NUM) {
-        char *reg = regs[cur++];
-        if (!reg) {
-            error("register exhausted");
-        }
-        printf("  mov %s, %d\n", reg, node->val);
-        return reg;
+        int r = regno++;
+        ins[inp++] = new_ir(IR_IMM, r, node->val);
+        return r;
     }
 
-    char *dst = gen(node->lhs);
-    char *src = gen(node->rhs);
+    assert(node->ty == '+' || node->ty == '-');
 
-    switch (node->ty) {
-        case '+':
-            printf("  add %s, %s\n", dst, src);
-            return dst;
-        case '-':
-            printf("  sub %s, %s\n", dst, src);
-            return dst;
+    // process child nodes
+    int lhs = gen_ir_sub(node->lhs);
+    int rhs = gen_ir_sub(node->rhs);
+
+    // execute operator
+    ins[inp++] = new_ir(node->ty, lhs, rhs);
+
+    // release register used by rhs
+    ins[inp++] = new_ir(IR_KILL, rhs, 0);
+
+    return lhs;
+}
+
+int gen_ir(Node *node) {
+    int r = gen_ir_sub(node);
+    ins[inp++] = new_ir(IR_RETURN, r, 0);
+}
+
+// register allocator
+char *regs[] = {"rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"};
+bool used[8];
+
+//
+int reg_map[1000];
+
+// find index of register to use
+int alloc(int ir_reg) {
+    if (reg_map[ir_reg] != -1) {
+        int r = reg_map[ir_reg];
+        assert(used[r]);
+        return r;
+    }
+
+    // use first of unallocated register
+    for (int i = 0; i < sizeof(regs) / sizeof(*regs); i++) {
+        if (used[i]) {
+            continue;
+        }
+        used[i] = true;
+        reg_map[ir_reg] = i;
+        return i;
+    }
+
+    error("register exhausted");
+}
+
+// release register allocation
+void kill(int r) {
+    assert(used[r]);
+    used[r] = false;
+}
+
+// allocate registers for all IR
+void alloc_regs() {
+    for (int i = 0; i < inp; i++) {
+        IR *ir = ins[i];
+
+        switch (ir->op) {
+            case IR_IMM:
+                ir->lhs = alloc(ir->lhs);
+                break;
+            case IR_MOV:
+            case '+':
+            case '-':
+                ir->lhs = alloc(ir->lhs);
+                ir->rhs = alloc(ir->rhs);
+                break;
+            case IR_RETURN:
+                kill(reg_map[ir->lhs]);
+                break;
+            case IR_KILL:
+                kill(reg_map[ir->lhs]);
+                ir->op = IR_NOP;
+                break;
+            default:
+                assert(0 && "unknown operator");
+        }
+    }
+}
+
+// code generator
+void gen_x86() {
+    for (int i = 0; i < inp; i++) {
+        IR *ir = ins[i];
+
+        switch (ir->op) {
+            case IR_IMM:
+                printf("  mov %s, %d\n", regs[ir->lhs], ir->rhs);
+                break;
+            case IR_MOV:
+                printf("  mov %s, %s\n", regs[ir->lhs], regs[ir->rhs]);
+                break;
+            case IR_RETURN:
+                printf("  mov rax, %s\n", regs[ir->lhs]);
+                printf("  ret\n");
+                break;
+            case '+':
+                printf("  add %s, %s\n", regs[ir->lhs], regs[ir->rhs]);
+                break;
+            case '-':
+                printf("  sub %s, %s\n", regs[ir->lhs], regs[ir->rhs]);
+                break;
+            case IR_NOP:
+                break;
+            default:
+                assert(0 && "unknown operator");
+        }
     }
 }
 
@@ -160,9 +287,18 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Invalid number of arguments");
     }
 
+    // initialize register allocation
+    for (int i = 0; i < sizeof(reg_map) / sizeof(*reg_map); i++) {
+        reg_map[i] = -1;
+    }
+
     // tokenize and parse
     tokenize(argv[1]);
     Node *node = expr();
+
+    // generate IR and allocate registers
+    gen_ir(node);
+    alloc_regs();
 
     // write assembler directives
     printf(".intel_syntax noprefix\n");
@@ -170,7 +306,6 @@ int main(int argc, char **argv) {
     printf("main:\n");
 
     // generate assembly code
-    printf("  mov rax, %s\n", gen(node));
-    printf("  ret\n");
+    gen_x86();
     return 0;
 }
