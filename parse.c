@@ -4,7 +4,7 @@ static Vector *tokens;
 static int pos;
 
 // create new node
-Node *new_node(int op, Node *lhs, Node *rhs) {
+static Node *new_node(int op, Node *lhs, Node *rhs) {
     Node *node = malloc(sizeof(Node));
     node->ty = op;
     node->lhs = lhs;
@@ -13,7 +13,7 @@ Node *new_node(int op, Node *lhs, Node *rhs) {
 }
 
 // create new number node
-Node *new_node_num(int val) {
+static Node *new_node_num(int val) {
     Node *node = malloc(sizeof(Node));
     node->ty = ND_NUM;
     node->val = val;
@@ -21,7 +21,7 @@ Node *new_node_num(int val) {
 }
 
 // number parser
-Node *number() {
+static Node *number() {
     Token *t = tokens->data[pos];
     if (t->ty != TK_NUM) {
         error("number expected, but got %s\n", t->input);
@@ -30,28 +30,42 @@ Node *number() {
     return new_node_num(t->val);
 }
 
-// expression parser
-Node *expr() {
+// multiplication parser
+static Node *mul() {
     Node *lhs = number();
     for (;;) {
         Token *t = tokens->data[pos];
         int op = t->ty;
-        if (op != '+' && op != '-') {
-            break;
+        if (op != '*' && op != '/') {
+            return lhs;
         }
         pos++;
         lhs = new_node(op, lhs, number());
     }
+}
 
-    Token *t = tokens->data[pos];
-    if (t->ty != TK_EOF) {
-        error("stray token: %s", t->input);
+// expression parser
+static Node *expr() {
+    Node *lhs = mul();
+    for (;;) {
+        Token *t = tokens->data[pos];
+        int op = t->ty;
+        if (op != '+' && op != '-') {
+            return lhs;
+        }
+        pos++;
+        lhs = new_node(op, lhs, mul());
     }
-    return lhs;
 }
 
 Node *parse(Vector *v) {
     tokens = v;
     pos = 0;
-    return expr();
+    Node *node = expr();
+
+    Token *t = tokens->data[pos];
+    if (t->ty != TK_EOF) {
+        error("stray token: %s", t->input);
+    }
+    return node;
 }
