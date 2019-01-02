@@ -19,7 +19,7 @@ static int gen(Vector *v, Node *node) {
         return r;
     }
 
-    assert(strchr("+-*", node->ty));
+    assert(strchr("+-*/", node->ty));
 
     // process child nodes
     int lhs = gen(v, node->lhs);
