@@ -7,6 +7,32 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
+// vector
+typedef struct {
+    void **data;
+    int capacity;
+    int len;
+} Vector;
+
+// create new vector
+Vector *new_vec() {
+    Vector *v = malloc(sizeof(Vector));
+    v->data = malloc(sizeof(void *) * 16);
+    v->capacity = 16;
+    v->len = 0;
+    return v;
+}
+
+// push data to vector
+void vec_push(Vector *v, void *elem) {
+    // expand if capacity exhaust
+    if (v->len == v->capacity) {
+        v->capacity *= 2;
+        v->data = realloc(v->data, sizeof(void *) * v->capacity);
+    }
+    v->data[v->len++] = elem;
+}
+
 // type of token
 enum {
     TK_NUM = 256,   // integer
@@ -20,11 +46,19 @@ typedef struct {
     char *input;    // token string (for error message)
 } Token;
 
-// tokenized results (up to 100 tokens)
-Token tokens[100];
+// add token
+Token *add_token(Vector *v, int ty, char *input) {
+    Token *t = malloc(sizeof(Token));
+    t->ty = ty;
+    t->input = input;
+    vec_push(v, t);
+    return t;
+}
 
 // divide string to tokens
-void tokenize(char *p) {
+Vector *tokenize(char *p) {
+    Vector *v = new_vec();
+
     int i = 0;
     while (*p) {
 
@@ -36,8 +70,7 @@ void tokenize(char *p) {
 
         // addition or subtraction
         if (*p == '+' || *p == '-') {
-            tokens[i].ty = *p;
-            tokens[i].input = p;
+            add_token(v, *p, p);
             i++;
             p++;
             continue;
@@ -45,9 +78,8 @@ void tokenize(char *p) {
 
         // integer number
         if (isdigit(*p)) {
-            tokens[i].ty = TK_NUM;
-            tokens[i].input = p;
-            tokens[i].val = strtol(p, &p, 10);
+            Token *t = add_token(v, TK_NUM, p);
+            t->val = strtol(p, &p, 10);
             i++;
             continue;
         }
@@ -58,12 +90,10 @@ void tokenize(char *p) {
     }
 
     // add terminate token
-    tokens[i].ty = TK_EOF;
-    tokens[i].input = p;
-}
+    add_token(v, TK_EOF, p);
 
-// processing token position
-int pos = 0;
+    return v;
+}
 
 // type of node
 enum {
@@ -77,6 +107,9 @@ typedef struct Node {
     struct Node *rhs;   // right hand side
     int val;            // value of ND_NUM
 } Node;
+
+Vector *tokens;
+int pos;
 
 // create new node
 Node *new_node(int op, Node *lhs, Node *rhs) {
@@ -106,17 +139,20 @@ noreturn void error(char *fmt, ...) {
 
 // number parser
 Node *number() {
-    if (tokens[pos].ty == TK_NUM) {
-        return new_node_num(tokens[pos++].val);
+    Token *t = tokens->data[pos];
+    if (t->ty != TK_NUM) {
+        error("number expected, but got %s\n", t->input);
     }
-    error("number expected, but got %s\n", tokens[pos].input);
+    pos++;
+    return new_node_num(t->val);
 }
 
 // expression parser
 Node *expr() {
     Node *lhs = number();
     for (;;) {
-        int op = tokens[pos].ty;
+        Token *t = tokens->data[pos];
+        int op = t->ty;
         if (op != '+' && op != '-') {
             break;
         }
@@ -124,8 +160,9 @@ Node *expr() {
         lhs = new_node(op, lhs, number());
     }
 
-    if (tokens[pos].ty != TK_EOF) {
-        error("stray token: %s", tokens[pos].input);
+    Token *t = tokens->data[pos];
+    if (t->ty != TK_EOF) {
+        error("stray token: %s", t->input);
     }
     return lhs;
 }
@@ -155,45 +192,42 @@ IR *new_ir(int op, int lhs, int rhs) {
     return ir;
 }
 
-// IR instructions and position index
-IR *ins[1000];
-int inp;
-
-// number of register for next use
-int regno;
-
 // generate IR instructions
-int gen_ir_sub(Node *node) {
+int gen_ir_sub(Vector *v, Node *node) {
+    static int regno;
+
     if (node->ty == ND_NUM) {
         int r = regno++;
-        ins[inp++] = new_ir(IR_IMM, r, node->val);
+        vec_push(v, new_ir(IR_IMM, r, node->val));
         return r;
     }
 
     assert(node->ty == '+' || node->ty == '-');
 
     // process child nodes
-    int lhs = gen_ir_sub(node->lhs);
-    int rhs = gen_ir_sub(node->rhs);
+    int lhs = gen_ir_sub(v, node->lhs);
+    int rhs = gen_ir_sub(v, node->rhs);
 
     // execute operator
-    ins[inp++] = new_ir(node->ty, lhs, rhs);
+    vec_push(v, new_ir(node->ty, lhs, rhs));
 
     // release register used by rhs
-    ins[inp++] = new_ir(IR_KILL, rhs, 0);
+    vec_push(v, new_ir(IR_KILL, rhs, 0));
 
     return lhs;
 }
 
-void gen_ir(Node *node) {
-    int r = gen_ir_sub(node);
-    ins[inp++] = new_ir(IR_RETURN, r, 0);
+Vector *gen_ir(Node *node) {
+    Vector *v = new_vec();
+    int r = gen_ir_sub(v, node);
+    vec_push(v, new_ir(IR_RETURN, r, 0));
+    return v;
 }
 
 // register allocator
 char *regs[] = {"rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"};
-bool used[8];
-int reg_map[1000];
+bool used[sizeof(regs) / sizeof(*regs)];
+int *reg_map;
 
 // find index of register to use
 int alloc(int ir_reg) {
@@ -223,9 +257,15 @@ void kill(int r) {
 }
 
 // allocate registers for all IR
-void alloc_regs() {
-    for (int i = 0; i < inp; i++) {
-        IR *ir = ins[i];
+void alloc_regs(Vector *irv) {
+    // initialize IR vector
+    reg_map = malloc(sizeof(int) * irv->len);
+    for (int i = 0; i < irv->len; i++) {
+        reg_map[i] = -1;
+    }
+
+    for (int i = 0; i < irv->len; i++) {
+        IR *ir = irv->data[i];
 
         switch (ir->op) {
             case IR_IMM:
@@ -251,9 +291,9 @@ void alloc_regs() {
 }
 
 // code generator
-void gen_x86() {
-    for (int i = 0; i < inp; i++) {
-        IR *ir = ins[i];
+void gen_x86(Vector *irv) {
+    for (int i = 0; i < irv->len; i++) {
+        IR *ir = irv->data[i];
 
         switch (ir->op) {
             case IR_IMM:
@@ -286,18 +326,13 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Invalid number of arguments");
     }
 
-    // initialize register allocation
-    for (int i = 0; i < sizeof(reg_map) / sizeof(*reg_map); i++) {
-        reg_map[i] = -1;
-    }
-
     // tokenize and parse
-    tokenize(argv[1]);
+    tokens = tokenize(argv[1]);
     Node *node = expr();
 
     // generate IR and allocate registers
-    gen_ir(node);
-    alloc_regs();
+    Vector *irv = gen_ir(node);
+    alloc_regs(irv);
 
     // write assembler directives
     printf(".intel_syntax noprefix\n");
@@ -305,6 +340,6 @@ int main(int argc, char **argv) {
     printf("main:\n");
 
     // generate assembly code
-    gen_x86();
+    gen_x86(irv);
     return 0;
 }
