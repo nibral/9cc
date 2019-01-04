@@ -1,5 +1,7 @@
 #include "9cc.h"
 
+Map *keywords;
+
 // add token
 Token *add_token(Vector *v, int ty, char *input) {
     Token *t = malloc(sizeof(Token));
@@ -10,7 +12,7 @@ Token *add_token(Vector *v, int ty, char *input) {
 }
 
 // divide string to tokens
-Vector *tokenize(char *p) {
+static Vector *scan(char *p) {
     Vector *v = new_vec();
 
     int i = 0;
@@ -23,10 +25,31 @@ Vector *tokenize(char *p) {
         }
 
         // single letter token
-        if (strchr("+-*/", *p)) {
+        if (strchr("+-*/;", *p)) {
             add_token(v, *p, p);
             i++;
             p++;
+            continue;
+        }
+
+        // keyword
+        if (isalpha(*p) || *p == '_') {
+            // count length of keyword
+            int len = 1;
+            while (isalpha(p[len]) || isdigit(p[len]) || p[len] == '_') {
+                len++;
+            }
+
+            // get value from keyword
+            char *name = strndup(p, len);
+            int ty = (intptr_t) map_get(keywords, name);
+            if (!ty) {
+                error("Unknown identifier: %s\n", name);
+            }
+
+            add_token(v, ty, p);
+            i++;
+            p += len;
             continue;
         }
 
@@ -39,12 +62,18 @@ Vector *tokenize(char *p) {
         }
 
         // stop if unexpected string read
-        fprintf(stderr, "Failed to tokenize: %s\n", p);
-        exit(1);
+        error("Failed to tokenize: %s\n", p);
     }
 
     // add terminate token
     add_token(v, TK_EOF, p);
 
     return v;
+}
+
+Vector *tokenize(char *p) {
+    keywords = new_map();
+    map_put(keywords, "return", (void *) TK_RETURN);
+
+    return scan(p);
 }
