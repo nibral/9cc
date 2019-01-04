@@ -3,6 +3,8 @@
 static Vector *tokens;
 static int pos;
 
+static Node *assign();
+
 static void expect(int ty) {
     Token *t = tokens->data[pos];
     if (t->ty != ty) {
@@ -31,8 +33,15 @@ static Node *new_node(int op, Node *lhs, Node *rhs) {
 
 // term parser
 static Node *term() {
-    Node *node = malloc(sizeof(Node));
     Token *t = tokens->data[pos++];
+
+    if (t->ty == '(') {
+        Node *node = assign();
+        expect(')');
+        return node;
+    }
+
+    Node *node = malloc(sizeof(Node));
 
     if (t->ty == TK_NUM) {
         node->ty = ND_NUM;

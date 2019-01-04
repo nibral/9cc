@@ -17,7 +17,7 @@ static IR *add(int op, int lhs, int rhs) {
     return ir;
 }
 
-// add IR with immutable number
+// add IR with immediate number
 static IR *add_imm(int op, int lhs, int imm) {
     IR *ir = calloc(1, sizeof(IR));
     ir->op = op;
