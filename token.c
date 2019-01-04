@@ -25,29 +25,30 @@ static Vector *scan(char *p) {
         }
 
         // single letter token
-        if (strchr("+-*/;", *p)) {
+        if (strchr("+-*/;=", *p)) {
             add_token(v, *p, p);
             i++;
             p++;
             continue;
         }
 
-        // keyword
+        // identifier
         if (isalpha(*p) || *p == '_') {
-            // count length of keyword
+            // count length of identifier
             int len = 1;
             while (isalpha(p[len]) || isdigit(p[len]) || p[len] == '_') {
                 len++;
             }
 
-            // get value from keyword
+            // get value from identifier
             char *name = strndup(p, len);
             int ty = (intptr_t) map_get(keywords, name);
             if (!ty) {
-                error("Unknown identifier: %s\n", name);
+                ty = TK_IDENT;
             }
 
-            add_token(v, ty, p);
+            Token *t = add_token(v, ty, p);
+            t->name = name;
             i++;
             p += len;
             continue;

@@ -48,6 +48,7 @@ void util_test();
 // type of token
 enum {
     TK_NUM = 256,   // integer
+    TK_IDENT,       // identifier
     TK_RETURN,      // "return"
     TK_EOF          // end of input
 };
@@ -56,6 +57,7 @@ enum {
 typedef struct {
     int ty;         // type
     int val;        // value of TK_NUM
+    char *name;     // identifier
     char *input;    // token string (for error message)
 } Token;
 
@@ -66,6 +68,7 @@ Vector *tokenize(char *p);
 // type of node
 enum {
     ND_NUM = 256,   // number
+    ND_IDENT,       // identifier
     ND_RETURN,      // return statement
     ND_COMP_STMT,   // compound statement
     ND_EXPR_STMT,   // expression statement
@@ -77,6 +80,7 @@ typedef struct Node {
     struct Node *lhs;   // left hand side
     struct Node *rhs;   // right hand side
     int val;            // value of ND_NUM
+    char *name;         // identifier
     struct Node *expr;  // "return" or expression statement
     Vector *stmts;      // compound statement
 } Node;
@@ -91,6 +95,9 @@ enum {
     IR_IMM,
     IR_MOV,
     IR_RETURN,
+    IR_ALLOCA,
+    IR_LOAD,
+    IR_STORE,
     IR_KILL,
     IR_NOP,
 };
