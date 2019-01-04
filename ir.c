@@ -9,10 +9,21 @@ static int bpoff;
 
 // add IR
 static IR *add(int op, int lhs, int rhs) {
-    IR *ir = malloc(sizeof(IR));
+    IR *ir = calloc(1, sizeof(IR));
     ir->op = op;
     ir->lhs = lhs;
     ir->rhs = rhs;
+    vec_push(code, ir);
+    return ir;
+}
+
+// add IR with immutable number
+static IR *add_imm(int op, int lhs, int imm) {
+    IR *ir = calloc(1, sizeof(IR));
+    ir->op = op;
+    ir->lhs = lhs;
+    ir->has_imm = true;
+    ir->imm = imm;
     vec_push(code, ir);
     return ir;
 }
@@ -30,16 +41,12 @@ static int gen_lval(Node *node) {
     }
 
     // calculate memory address with offset
-    int r1 = regno++;
+    int r = regno++;
     int off = (intptr_t) map_get(vars, node->name);
-    add(IR_MOV, r1, basereg);
+    add(IR_MOV, r, basereg);
+    add_imm('+', r, off);
 
-    int r2 = regno++;
-    add(IR_IMM, r2, off);
-    add('+', r1, r2);
-    add(IR_KILL, r2, -1);
-
-    return r1;
+    return r;
 }
 
 // generate IR expression

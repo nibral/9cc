@@ -107,6 +107,10 @@ typedef struct {
     int op;
     int lhs;
     int rhs;
+
+    // immutable number
+    bool has_imm;
+    int imm;
 } IR;
 
 Vector *gen_ir(Node *node);
