@@ -4,6 +4,13 @@ int main(int argc, char **argv) {
     // argument check
     if (argc != 2) {
         fprintf(stderr, "Invalid number of arguments");
+        return 1;
+    }
+
+    // test mode
+    if (!strcmp(argv[1], "-test")) {
+        util_test();
+        return 0;
     }
 
     // tokenize and parse

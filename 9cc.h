@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
 #include <string.h>
@@ -21,6 +22,23 @@ typedef struct {
 Vector *new_vec(void);
 
 void vec_push(Vector *v, void *elem);
+
+
+// map
+typedef struct {
+    Vector *keys;
+    Vector *vals;
+} Map;
+
+Map *new_map(void);
+
+void map_put(Map *map, char *key, void *val);
+
+void *map_get(Map *map, char *key);
+
+/// util_test.c
+
+void util_test();
 
 /// token.c
 
