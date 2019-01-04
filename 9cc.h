@@ -23,7 +23,6 @@ Vector *new_vec(void);
 
 void vec_push(Vector *v, void *elem);
 
-
 // map
 typedef struct {
     Vector *keys;
@@ -35,6 +34,8 @@ Map *new_map(void);
 void map_put(Map *map, char *key, void *val);
 
 void *map_get(Map *map, char *key);
+
+bool map_exists(Map *map, char *key);
 
 /// util_test.c
 
